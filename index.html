@@ -152,7 +152,7 @@
     }
 
     .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; }
-    table { width: 100%; min-width: 700px; border-collapse: collapse; }
+    table { width: 100%; min-width: 900px; border-collapse: collapse; }
     th { font-size: 10px; padding: 10px; color: var(--text-muted); border-bottom: 2px solid rgba(0,0,0,0.05); white-space: nowrap; }
     td { padding: 10px; font-size: 12px; border-bottom: 1px solid rgba(0,0,0,0.03); white-space: nowrap; }
     td:first-child { position: sticky; left: 0; background: var(--card-bg); }
@@ -282,9 +282,12 @@
   const SHEET_TREND_2025 = "https://opensheet.elk.sh/17qXOuePLlCtB8Z-J5e7xISkJ0VybGuAVZSxPTXq4ilc/Installment_2025";
   const SHEET_TREND_2026 = "https://opensheet.elk.sh/17qXOuePLlCtB8Z-J5e7xISkJ0VybGuAVZSxPTXq4ilc/Installment_2026";
 
-  // Ümumi satış sheet-ləri (cədvəl üçün)
   const SHEET_SALES_2025 = "https://opensheet.elk.sh/17qXOuePLlCtB8Z-J5e7xISkJ0VybGuAVZSxPTXq4ilc/Sales_2025";
   const SHEET_SALES_2026 = "https://opensheet.elk.sh/17qXOuePLlCtB8Z-J5e7xISkJ0VybGuAVZSxPTXq4ilc/Sales_2026";
+
+  // Aylar: həm nömrə ilə mapping, həm adla göstərmək üçün
+  const MONTH_NUMS  = ["01","02","03","04","05","06","07","08","09","10","11","12"];
+  const MONTH_NAMES = ["Yanvar","Fevral","Mart","Aprel","May","İyun","İyul","Avqust","Sentyabr","Oktyabr","Noyabr","Dekabr"];
 
   let charts = {};
 
@@ -340,14 +343,12 @@
   }
 
   function buildMonthlyTableHTML(salesMap, instMap) {
-    const months = ["01","02","03","04","05","06","07","08","09","10","11","12"];
-
     const header = `
       <table>
         <thead>
           <tr>
             <th style="text-align:left; min-width:160px;">Göstərici</th>
-            ${months.map(m => `<th>${m}</th>`).join("")}
+            ${MONTH_NAMES.map(m => `<th>${m}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
@@ -356,7 +357,7 @@
     const rowSales = `
       <tr>
         <td style="font-weight:800;">Ümumi satış</td>
-        ${months.map(m => {
+        ${MONTH_NUMS.map(m => {
           const v = salesMap.get(m);
           return `<td>${(v === undefined || v === null) ? "-" : fmtManat(v)}</td>`;
         }).join("")}
@@ -366,7 +367,7 @@
     const rowInst = `
       <tr>
         <td style="font-weight:800;">Hissəli satış</td>
-        ${months.map(m => {
+        ${MONTH_NUMS.map(m => {
           const v = instMap.get(m);
           return `<td>${(v === undefined || v === null) ? "-" : fmtManat(v)}</td>`;
         }).join("")}
@@ -376,7 +377,7 @@
     const rowShare = `
       <tr>
         <td style="font-weight:800;">Hissəli həcmi</td>
-        ${months.map(m => {
+        ${MONTH_NUMS.map(m => {
           const inst = instMap.get(m);
           const sale = salesMap.get(m);
           if (inst === undefined || inst === null || sale === undefined || sale === null) return `<td>-</td>`;
@@ -501,22 +502,21 @@
         options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { enabled: false } } }
       });
 
-      // Line chart: YALNIZ hissəli (2025/2026)
+      // Line chart: YALNIZ hissəli (2025/2026) — ay adları ilə
       if (charts.line) charts.line.destroy();
 
-      const labels = ["01","02","03","04","05","06","07","08","09","10","11","12"];
       const monthKey = (ay) => String(ay || "").slice(5, 7);
 
       const mapInst25 = new Map((trend25 || []).map(r => [monthKey(r.Ay), toNum(r.Hissəli_Odenis)]));
       const mapInst26 = new Map((trend26 || []).map(r => [monthKey(r.Ay), toNum(r.Hissəli_Odenis)]));
 
-      const dataInst25 = labels.map(m => mapInst25.has(m) ? mapInst25.get(m) : null);
-      const dataInst26 = labels.map(m => mapInst26.has(m) ? mapInst26.get(m) : null);
+      const dataInst25 = MONTH_NUMS.map(m => mapInst25.has(m) ? mapInst25.get(m) : null);
+      const dataInst26 = MONTH_NUMS.map(m => mapInst26.has(m) ? mapInst26.get(m) : null);
 
       charts.line = new Chart(document.getElementById("installmentLine"), {
         type: "line",
         data: {
-          labels,
+          labels: MONTH_NAMES,
           datasets: [
             {
               label: "2025 Hissəli",
@@ -546,7 +546,6 @@
       });
 
       // Cədvəllər (2025 və 2026)
-      // Sales sheet-lərində sütun adları: Ay, Umumi_Satis
       const mapSales25 = new Map((sales25 || []).map(r => [monthKey(r.Ay), toNum(r.Umumi_Satis)]));
       const mapSales26 = new Map((sales26 || []).map(r => [monthKey(r.Ay), toNum(r.Umumi_Satis)]));
 
