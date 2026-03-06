@@ -274,6 +274,25 @@
         </div>
       </div>
 
+      <!-- ✅ PDF Arxivi -->
+      <div class="collapsible-section">
+        <div class="section-header">PDF Arxivi</div>
+        <div class="section-content">
+          <div class="chart-box-inner" style="min-height:auto;">
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+              <div style="font-weight:900; color: var(--primary-blue);">Aylıq hesabatlar</div>
+
+              <select id="pdfMonthFilter"
+                      style="padding:8px 10px; border-radius:10px; border:1px solid rgba(0,0,0,0.12); background: var(--card-bg); color: var(--text-main); font-weight:700;">
+                <option value="all">Hamısı</option>
+              </select>
+            </div>
+
+            <div class="table-wrapper" id="pdfArchiveTable"></div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -285,7 +304,10 @@
   const SHEET_SALES_2025 = "https://opensheet.elk.sh/17qXOuePLlCtB8Z-J5e7xISkJ0VybGuAVZSxPTXq4ilc/Sales_2025";
   const SHEET_SALES_2026 = "https://opensheet.elk.sh/17qXOuePLlCtB8Z-J5e7xISkJ0VybGuAVZSxPTXq4ilc/Sales_2026";
 
-  // Aylar: həm nömrə ilə mapping, həm adla göstərmək üçün
+  // ✅ PDF Arxiv sheet
+  const SHEET_PDF_ARCHIVE = "https://opensheet.elk.sh/17qXOuePLlCtB8Z-J5e7xISkJ0VybGuAVZSxPTXq4ilc/PDF_Archive";
+
+  // Aylar
   const MONTH_NUMS  = ["01","02","03","04","05","06","07","08","09","10","11","12"];
   const MONTH_NAMES = ["Yanvar","Fevral","Mart","Aprel","May","İyun","İyul","Avqust","Sentyabr","Oktyabr","Noyabr","Dekabr"];
 
@@ -302,7 +324,6 @@
     header.onclick = () => header.parentElement.classList.toggle('collapsed');
   });
 
-  // toNum: dəyişmirik
   function toNum(x) {
     if (x === null || x === undefined || x === "") return 0;
 
@@ -321,7 +342,6 @@
     return Number.isFinite(n) ? n : 0;
   }
 
-  // Format: minlik nöqtə + ₼
   function fmtDot(n) {
     const num = Number(n) || 0;
     return num.toLocaleString("en-US").replace(/,/g, ".");
@@ -386,18 +406,88 @@
       </tr>
     `;
 
-    const footer = `</tbody></table>`;
-    return header + rowSales + rowInst + rowShare + footer;
+    return header + rowSales + rowInst + rowShare + `</tbody></table>`;
+  }
+
+  // ✅ PDF Render (ən yenisi üstdə + başlıq kliklənir)
+  function normMonthLabel(m) { return String(m || "").trim(); }
+  function monthSortKey(s) {
+    const t = String(s || "").trim();
+    const m = t.match(/^(\d{4})-(\d{2})$/);
+    if (!m) return -1;
+    return Number(m[1]) * 100 + Number(m[2]);
+  }
+
+  function renderPdfArchive(pdfRows) {
+    const rows = (pdfRows || [])
+      .map(r => ({
+        ay: normMonthLabel(r.Ay),
+        basliq: String(r.Basliq || "").trim(),
+        link: String(r.Link || "").trim()
+      }))
+      .filter(x => x.ay || x.basliq || x.link);
+
+    rows.sort((a, b) => monthSortKey(b.ay) - monthSortKey(a.ay));
+
+    const monthSelect = document.getElementById("pdfMonthFilter");
+    const months = Array.from(new Set(rows.map(x => x.ay).filter(Boolean)))
+      .sort((a, b) => monthSortKey(b) - monthSortKey(a));
+
+    monthSelect.innerHTML =
+      `<option value="all">Hamısı</option>` +
+      months.map(m => `<option value="${m}">${m}</option>`).join("");
+
+    function linkifyTitle(title, url) {
+      if (!url) return title || "-";
+      const safeTitle = title ? title.replace(/</g, "&lt;").replace(/>/g, "&gt;") : "PDF";
+      const safeUrl = url.replace(/"/g, "%22");
+      return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeTitle}</a>`;
+    }
+
+    function drawTable(filterValue) {
+      const filtered = (filterValue === "all")
+        ? rows
+        : rows.filter(x => x.ay === filterValue);
+
+      const html = `
+        <table>
+          <thead>
+            <tr>
+              <th>Ay</th>
+              <th>Başlıq</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              filtered.length
+                ? filtered.map(x => `
+                    <tr>
+                      <td><b>${x.ay || "-"}</b></td>
+                      <td>${linkifyTitle(x.basliq || "Hesabat", x.link)}</td>
+                    </tr>
+                  `).join("")
+                : `<tr><td colspan="2">Heç nə tapılmadı.</td></tr>`
+            }
+          </tbody>
+        </table>
+      `;
+
+      document.getElementById("pdfArchiveTable").innerHTML = html;
+    }
+
+    drawTable("all");
+    monthSelect.onchange = () => drawTable(monthSelect.value);
   }
 
   async function loadData() {
     try {
-      const [rows, trend25, trend26, sales25, sales26] = await Promise.all([
+      const [rows, trend25, trend26, sales25, sales26, pdfRows] = await Promise.all([
         fetch(SHEET, { cache: "no-store" }).then(r => r.json()),
         fetch(SHEET_TREND_2025, { cache: "no-store" }).then(r => r.json()),
         fetch(SHEET_TREND_2026, { cache: "no-store" }).then(r => r.json()),
         fetch(SHEET_SALES_2025, { cache: "no-store" }).then(r => r.json()),
-        fetch(SHEET_SALES_2026, { cache: "no-store" }).then(r => r.json())
+        fetch(SHEET_SALES_2026, { cache: "no-store" }).then(r => r.json()),
+        fetch(SHEET_PDF_ARCHIVE, { cache: "no-store" }).then(r => r.json())
       ]);
 
       const d = rows[0] || {};
@@ -422,7 +512,6 @@
       const cureAmount  = toNum(d.CureAmount);
       const activeCustomers = toNum(d["Aktiv müştəri sayı"]);
 
-      // KPI-lar
       document.getElementById("mainKpi").innerHTML = `
         <div class="kpi-box" style="background: var(--primary-blue); color: white;">
           <div class="kpi-label" style="color: rgba(255,255,255,0.7)">Portfel</div>
@@ -478,7 +567,6 @@
         </div>
       `;
 
-      // Gauge
       const total = toNum(d.TotalTarget);
       const actual = toNum(d.TotalActual);
       const percent = total > 0 ? Math.min((actual / total) * 100, 100).toFixed(1) : "0.0";
@@ -502,7 +590,6 @@
         options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { enabled: false } } }
       });
 
-      // Line chart: YALNIZ hissəli (2025/2026) — ay adları ilə
       if (charts.line) charts.line.destroy();
 
       const monthKey = (ay) => String(ay || "").slice(5, 7);
@@ -518,41 +605,19 @@
         data: {
           labels: MONTH_NAMES,
           datasets: [
-            {
-              label: "2025 Hissəli",
-              data: dataInst25,
-              borderColor: "#2563eb",
-              backgroundColor: "rgba(37, 99, 235, 0.12)",
-              fill: false,
-              tension: 0.4,
-              pointRadius: 2
-            },
-            {
-              label: "2026 Hissəli",
-              data: dataInst26,
-              borderColor: "#dc2626",
-              backgroundColor: "rgba(220, 38, 38, 0.12)",
-              fill: false,
-              tension: 0.4,
-              pointRadius: 2
-            }
+            { label: "2025 Hissəli", data: dataInst25, borderColor: "#2563eb", backgroundColor: "rgba(37, 99, 235, 0.12)", fill: false, tension: 0.4, pointRadius: 2 },
+            { label: "2026 Hissəli", data: dataInst26, borderColor: "#dc2626", backgroundColor: "rgba(220, 38, 38, 0.12)", fill: false, tension: 0.4, pointRadius: 2 }
           ]
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: true } }
-        }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true } } }
       });
 
-      // Cədvəllər (2025 və 2026)
       const mapSales25 = new Map((sales25 || []).map(r => [monthKey(r.Ay), toNum(r.Umumi_Satis)]));
       const mapSales26 = new Map((sales26 || []).map(r => [monthKey(r.Ay), toNum(r.Umumi_Satis)]));
 
       document.getElementById("monthlyTable2025").innerHTML = buildMonthlyTableHTML(mapSales25, mapInst25);
       document.getElementById("monthlyTable2026").innerHTML = buildMonthlyTableHTML(mapSales26, mapInst26);
 
-      // Experts
       const experts = [
         { n: d.Expert1, s: toNum(d.ExpertSale1), t: toNum(d.ExpertTarget1), h: toNum(d.Expert1Target) },
         { n: d.Expert2, s: toNum(d.ExpertSale2), t: toNum(d.ExpertTarget2), h: toNum(d.Expert2Target) },
@@ -575,7 +640,6 @@
         </div>
       `).join("");
 
-      // Companies
       const cos = [
         ["MyShops", d.MyShopsPortfolio, d.MyShopsPar],
         ["MyCars", d.MyCarsPortfolio, d.MyCarsPar],
@@ -591,12 +655,14 @@
         </tr>
       `).join("");
 
-      // Summary
       document.getElementById("summaryText").innerHTML =
         `Portfel <b>${Math.abs(diff)}%</b> ${trendWord(diff)}. ` +
         `PAR30 <b>${Math.abs(parDiff)}%</b> ${trendWord(parDiff)}. ` +
         `Marja <b>${Math.abs(marjaDiff)}%</b> ${trendWord(marjaDiff)}. ` +
         `Hədəf icrası <b>${percent}%</b>-dir.`;
+
+      // ✅ PDF render
+      renderPdfArchive(pdfRows);
 
     } catch (e) {
       console.error("Xəta:", e);
